@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / Vite
+node_modules/
+frontend/dist/
+*.local
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Generated application data (future phases)
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/processed/*
+!backend/processed/.gitkeep
+backend/models_cache/
+*.db
+*.sqlite3
+
+# ML and search artifacts
+*.faiss
+*.index
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+

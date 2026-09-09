@@ -30,7 +30,7 @@ function AppShell({ children }) {
 
           <nav className="flex items-center gap-1" aria-label="Primary navigation">
             <NavLink to="/" className={navLinkClass}>Dashboard</NavLink>
-            <span className="hidden rounded-full px-4 py-2 text-sm font-medium text-ink/30 sm:inline">Upload · Phase 2</span>
+            <NavLink to="/upload" className={navLinkClass}>Upload</NavLink>
           </nav>
         </div>
       </header>
@@ -41,4 +41,3 @@ function AppShell({ children }) {
 }
 
 export default AppShell
-

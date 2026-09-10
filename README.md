@@ -2,7 +2,7 @@
 
 DocuLens AI is an offline-first document intelligence platform for scanned financial documents. The project is being built incrementally for the ARCIL document extraction assignment.
 
-## Current milestone: Phase 8
+## Current milestone: Phase 10
 
 The project currently includes:
 
@@ -33,8 +33,15 @@ The project currently includes:
 - Scale-aware OCR bounding-box overlays aligned to the enhanced page image
 - Hover and keyboard-focus OCR tooltips showing region text and confidence
 - Clickable entity cards that navigate to and highlight their source region where coordinates are available
+- Page-aware overlapping text chunks persisted with FAISS vector positions
+- Offline `all-MiniLM-L6-v2` sentence embeddings and per-document cosine-similarity indexes
+- Ranked semantic search results with scores, excerpts, page references, and click-to-page navigation
+- In-memory JSON exports containing document metadata, page OCR, OCR regions, entities, and search chunks
+- Excel-friendly CSV entity exports with document and source-page traceability
+- Readable plain-text exports containing page-by-page OCR and an extracted-entity appendix
+- Workspace export controls that download completed documents without leaving derivative files on the server
 
-Semantic search, bounding-box overlays, exports, and Docker are intentionally reserved for later phases.
+Persistence hardening, database migrations, Docker, and final testing polish are intentionally reserved for later phases.
 
 ## Repository layout
 
@@ -85,6 +92,7 @@ python -m pip install paddlepaddle==3.3.0 -i https://www.paddlepaddle.org.cn/pac
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 python -m scripts.download_ocr_models
+python -m scripts.download_embedding_model
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -112,7 +120,11 @@ npm.cmd run dev
 
 Open <http://127.0.0.1:5173>. The dashboard should show **Backend connected** when both applications are running.
 
-Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to the primary document workspace. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, `OCR_PROCESSING`, `EXTRACTING_ENTITIES`, and **Entities ready** stages. Use the left page rail or previous/next controls to navigate, then enable **Regions** on the enhanced image. Hover or keyboard-focus a region to see its OCR text and confidence. In the Entities tab, select a page or document entity to navigate to and highlight its source area. Overlays are intentionally disabled on the original image because preprocessing resize and deskew operations can change its coordinate system. The **Inspect** action opens the dedicated page view with the same verification controls.
+Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to the primary document workspace. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, `OCR_PROCESSING`, `EXTRACTING_ENTITIES`, `INDEXING`, and **Processing complete** stages. Use the left page rail or previous/next controls to navigate, then enable **Regions** on the enhanced image. Hover or keyboard-focus a region to see its OCR text and confidence. In the Entities tab, select an entity to navigate to and highlight its source area. In the Search tab, enter a natural-language query and choose a ranked result to jump to its referenced page. Overlays are intentionally disabled on the original image because preprocessing resize and deskew operations can change its coordinate system.
+
+After processing completes, choose JSON, CSV, or TXT in the workspace header and select **Export**. The browser should download the requested format using a safe derivative of the original PDF filename.
+
+Documents processed before Phase 9 show a **Build search index** action. Use it once to create their chunks and local FAISS index without rerunning OCR or entity extraction.
 
 ## Run checks
 
@@ -137,13 +149,15 @@ Backend settings use the `DOCULENS_` prefix. Frontend variables use Vite's `VITE
 - `GET /documents/{document_id}/pages` - returns ordered page metadata
 - `GET /documents/{document_id}/pages/{page_number}` - returns page text, confidence, and OCR regions
 - `GET /documents/{document_id}/entities` - returns all stored entities; accepts an optional `page_number` query parameter
+- `POST /documents/{document_id}/search` - returns ranked semantic matches with scores and page references
+- `GET /documents/{document_id}/export?format=json|csv|txt` - downloads metadata and extracted information
 - `GET /documents/{document_id}/pages/{page_number}/image` - serves an original or `?variant=preprocessed` page PNG
 - `GET /health` — reports API health
 - `POST /documents/upload` — accepts one multipart PDF in the `file` field
 
 ## Offline operation
 
-No document content is sent to a cloud inference service. Run `python -m scripts.download_ocr_models` once while online; the lightweight PaddleOCR detection and English recognition models are then stored in the gitignored `backend/models_cache` directory. The `en_core_web_sm` spaCy pipeline is installed with the Python dependencies. OCR and entity extraction both work locally without an internet connection after setup. The final `INDEXING` status currently means Phase 6 is complete and the document is ready for a later semantic-indexing phase.
+No document content is sent to a cloud inference service. Run `python -m scripts.download_ocr_models` and `python -m scripts.download_embedding_model` once while online. PaddleOCR and `all-MiniLM-L6-v2` are then stored in the gitignored `backend/models_cache` directory, while per-document FAISS files are stored in `backend/search_indexes`. The `en_core_web_sm` spaCy pipeline is installed with the Python dependencies. OCR, entity extraction, indexing, search, and export generation all work locally without an internet connection after setup.
 
 ## Planned architecture
 

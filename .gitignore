@@ -23,6 +23,7 @@ backend/uploads/*
 backend/processed/*
 !backend/processed/.gitkeep
 backend/models_cache/
+backend/search_indexes/
 *.db
 *.sqlite3
 
@@ -35,4 +36,3 @@ backend/models_cache/
 .vscode/
 .DS_Store
 Thumbs.db
-

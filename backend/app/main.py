@@ -13,6 +13,7 @@ async def lifespan(_: FastAPI):
     settings = get_settings()
     settings.resolved_upload_directory.mkdir(parents=True, exist_ok=True)
     settings.resolved_processed_directory.mkdir(parents=True, exist_ok=True)
+    settings.resolved_search_index_directory.mkdir(parents=True, exist_ok=True)
     initialize_database()
     yield
 

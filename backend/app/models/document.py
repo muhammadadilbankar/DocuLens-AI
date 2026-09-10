@@ -54,3 +54,9 @@ class Document(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    chunks: Mapped[list["DocumentChunk"]] = relationship(  # noqa: F821
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="DocumentChunk.vector_position",
+    )

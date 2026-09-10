@@ -6,15 +6,16 @@ import WorkspaceDocumentViewer from '../components/WorkspaceDocumentViewer.jsx'
 import WorkspaceInsights from '../components/WorkspaceInsights.jsx'
 import WorkspacePageRail from '../components/WorkspacePageRail.jsx'
 import { useDocumentPages } from '../hooks/useDocumentPages.js'
-import { getApiErrorMessage, getDocumentPage } from '../services/api.js'
+import { getApiErrorMessage, getDocumentExport, getDocumentPage } from '../services/api.js'
 
-const activeStatuses = new Set(['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES'])
+const activeStatuses = new Set(['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES', 'INDEXING'])
 
 function processingMessage(document) {
   if (document.status === 'CONVERTING') return 'Rendering document pages with PyMuPDF…'
   if (document.status === 'PREPROCESSING') return 'Improving scan quality with OpenCV…'
   if (document.status === 'OCR_PROCESSING') return `Reading pages with PaddleOCR… ${document.ocr_page_count}/${document.page_count}`
-  return `Extracting entities with local NLP… ${document.entity_count} found`
+  if (document.status === 'EXTRACTING_ENTITIES') return `Extracting entities with local NLP… ${document.entity_count} found`
+  return `Building the local semantic search index… ${document.indexed_chunk_count} chunks stored`
 }
 
 function DocumentUploadedPage() {
@@ -37,6 +38,9 @@ function DocumentUploadedPage() {
   const [variant, setVariant] = useState('preprocessed')
   const [showOverlays, setShowOverlays] = useState(true)
   const [highlightedEntity, setHighlightedEntity] = useState(null)
+  const [exportFormat, setExportFormat] = useState('json')
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
 
   useEffect(() => {
     if (pages.length && !pages.some((page) => page.page_number === selectedPageNumber)) {
@@ -69,7 +73,9 @@ function DocumentUploadedPage() {
   const isLegacyPagesReady = document?.status === 'PREPROCESSING' && pages.length > 0 && !pipelineRequested && pages.every((page) => !page.preprocessed_image_url)
   const isReadyForOcr = document?.status === 'OCR_PROCESSING' && pages.length > 0 && !pipelineRequested && pages.some((page) => !page.ocr_completed)
   const isReadyForEntities = document?.status === 'EXTRACTING_ENTITIES' && !pipelineRequested
-  const canStart = document?.status === 'UPLOADED' || document?.status === 'FAILED' || isLegacyPagesReady || isReadyForOcr || isReadyForEntities
+  const isReadyForIndexing = document?.status === 'INDEXING' && !pipelineRequested
+  const isLegacySearchReady = document?.status === 'COMPLETED' && document.indexed_chunk_count === 0
+  const canStart = document?.status === 'UPLOADED' || document?.status === 'FAILED' || isLegacyPagesReady || isReadyForOcr || isReadyForEntities || isReadyForIndexing || isLegacySearchReady
   const isProcessing = Boolean(document && activeStatuses.has(document.status))
   const actionLabel = document?.status === 'FAILED'
     ? 'Retry processing'
@@ -79,6 +85,8 @@ function DocumentUploadedPage() {
         ? 'Run offline OCR'
         : isReadyForEntities
           ? 'Extract entities'
+          : isReadyForIndexing || isLegacySearchReady
+            ? 'Build search index'
           : 'Process document'
 
   const selectPage = (pageNumber) => {
@@ -91,6 +99,29 @@ function DocumentUploadedPage() {
     setSelectedPageNumber(entity.page_number)
     setVariant('preprocessed')
     setShowOverlays(true)
+  }
+
+  const selectSearchResult = (result) => {
+    setHighlightedEntity(null)
+    setSelectedPageNumber(result.page_number)
+  }
+
+  const downloadExport = async () => {
+    setExporting(true)
+    setExportError('')
+    try {
+      const { blob, filename } = await getDocumentExport(id, exportFormat)
+      const downloadUrl = URL.createObjectURL(blob)
+      const link = window.document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0)
+    } catch (requestError) {
+      setExportError(getApiErrorMessage(requestError))
+    } finally {
+      setExporting(false)
+    }
   }
 
   if (loading) {
@@ -115,6 +146,17 @@ function DocumentUploadedPage() {
             {canStart ? (
               <button type="button" onClick={startConversion} disabled={starting} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink transition hover:bg-white disabled:cursor-wait disabled:opacity-60">{starting ? 'Starting…' : actionLabel}</button>
             ) : null}
+            {document?.status === 'COMPLETED' ? (
+              <div className="flex overflow-hidden rounded-full border border-white/15">
+                <label htmlFor="export-format" className="sr-only">Export format</label>
+                <select id="export-format" value={exportFormat} onChange={(event) => setExportFormat(event.target.value)} disabled={exporting} className="border-0 bg-white/10 py-2.5 pl-3 pr-2 text-xs font-semibold uppercase text-white outline-none disabled:opacity-50">
+                  <option value="json" className="text-ink">JSON</option>
+                  <option value="csv" className="text-ink">CSV</option>
+                  <option value="txt" className="text-ink">TXT</option>
+                </select>
+                <button type="button" onClick={downloadExport} disabled={exporting} className="border-l border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-wait disabled:opacity-50">{exporting ? 'Exporting…' : 'Export'}</button>
+              </div>
+            ) : null}
             <button type="button" onClick={refresh} className="rounded-full border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">Refresh</button>
             <Link to="/upload" className="rounded-full border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">Upload another</Link>
           </div>
@@ -125,7 +167,7 @@ function DocumentUploadedPage() {
             ['Pages', document?.page_count ?? 0],
             ['OCR complete', `${document?.ocr_page_count ?? 0}/${document?.page_count ?? 0}`],
             ['Entities', document?.entity_count ?? 0],
-            ['Created', document?.created_at ? new Date(document.created_at).toLocaleDateString() : '—'],
+            ['Search chunks', document?.indexed_chunk_count ?? 0],
           ].map(([label, value]) => (
             <div key={label} className="border-r border-white/10 px-5 py-4 last:border-r-0">
               <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-white/35">{label}</p>
@@ -142,8 +184,8 @@ function DocumentUploadedPage() {
         </div>
       ) : null}
 
-      {error || pageError ? (
-        <div role="alert" className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">{error || pageError}</div>
+      {error || pageError || exportError ? (
+        <div role="alert" className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">{error || pageError || exportError}</div>
       ) : null}
 
       {document?.status === 'FAILED' && document.error_message ? (
@@ -176,6 +218,7 @@ function DocumentUploadedPage() {
             entities={entities}
             onEntitySelect={selectEntity}
             selectedEntityId={highlightedEntity?.id}
+            onSearchResultSelect={selectSearchResult}
           />
         </div>
       ) : (

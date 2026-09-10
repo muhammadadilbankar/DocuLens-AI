@@ -8,7 +8,7 @@ function WorkspaceDocumentViewer({ documentId, page, loading, variant, onVariant
     ? page.preprocessed_image_url
     : page?.image_url
   const canShowOverlays = variant === 'preprocessed' && Boolean(page?.ocr_blocks?.length)
-  const highlightedBox = highlightedEntity?.page_number === page?.page_number
+  const highlightedBox = highlightedEntity && page && highlightedEntity.page_number === page.page_number
     ? highlightedEntity.bounding_box
     : null
 

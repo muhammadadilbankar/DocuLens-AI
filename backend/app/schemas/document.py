@@ -19,6 +19,7 @@ class DocumentResponse(BaseModel):
     page_count: int
     ocr_page_count: int
     entity_count: int
+    indexed_chunk_count: int
     status: DocumentStatus
     created_at: datetime
     processed_at: datetime | None

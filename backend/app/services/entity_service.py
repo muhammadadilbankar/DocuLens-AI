@@ -10,6 +10,7 @@ from app.core.database import SessionLocal
 from app.models.document import Document, DocumentStatus
 from app.models.entity import Entity
 from app.models.page import Page
+from app.services.search_service import process_document_index
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,7 @@ def extract_entities(text: str, ocr_blocks: list[Any], nlp: Any) -> list[Extract
 
 
 def process_document_entities(document_id: uuid.UUID, settings: Settings) -> None:
+    extraction_succeeded = False
     with SessionLocal() as database:
         document = database.get(Document, document_id)
         if document is None:
@@ -267,12 +269,16 @@ def process_document_entities(document_id: uuid.UUID, settings: Settings) -> Non
 
             document.status = DocumentStatus.INDEXING
             database.commit()
+            extraction_succeeded = True
         except Exception as exc:
             database.rollback()
             failed_document = database.get(Document, document_id)
             if failed_document is not None:
                 _mark_failed(database, failed_document, str(exc)[:2000])
             logger.exception("Entity extraction failed for document %s", document_id)
+
+    if extraction_succeeded:
+        process_document_index(document_id, settings)
 
 
 def _bounding_box_for_span(

@@ -51,6 +51,29 @@ export async function getDocumentEntities(documentId, pageNumber) {
   return data
 }
 
+export async function searchDocument(documentId, query, limit = 5) {
+  const { data } = await api.post(
+    `/documents/${documentId}/search`,
+    { query, limit },
+    { timeout: 30000 },
+  )
+  return data
+}
+
+export async function getDocumentExport(documentId, format) {
+  const response = await api.get(`/documents/${documentId}/export`, {
+    params: { format },
+    responseType: 'blob',
+    timeout: 120000,
+  })
+  const disposition = response.headers['content-disposition'] ?? ''
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/i)
+  return {
+    blob: response.data,
+    filename: filenameMatch?.[1] ?? `document-export.${format}`,
+  }
+}
+
 export function getPageImageUrl(imagePath) {
   return new URL(imagePath, `${api.defaults.baseURL}/`).toString()
 }

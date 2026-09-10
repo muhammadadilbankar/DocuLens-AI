@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   getApiErrorMessage,
@@ -16,22 +16,33 @@ export function useDocumentPages(documentId) {
   const [starting, setStarting] = useState(false)
   const [pipelineRequested, setPipelineRequested] = useState(false)
   const [error, setError] = useState('')
+  const activeRefreshRef = useRef(null)
 
   const refresh = useCallback(async () => {
+    if (activeRefreshRef.current?.documentId === documentId) return
+    const refreshToken = { documentId }
+    activeRefreshRef.current = refreshToken
     try {
       const [metadata, pageData, entityData] = await Promise.all([
         getDocument(documentId),
         getDocumentPages(documentId),
         getDocumentEntities(documentId),
       ])
-      setDocument(metadata)
-      setPages(pageData)
-      setEntities(entityData)
-      setError('')
+      if (activeRefreshRef.current === refreshToken) {
+        setDocument(metadata)
+        setPages(pageData)
+        setEntities(entityData)
+        setError('')
+      }
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError))
+      if (activeRefreshRef.current === refreshToken) {
+        setError(getApiErrorMessage(requestError))
+      }
     } finally {
-      setLoading(false)
+      if (activeRefreshRef.current === refreshToken) {
+        activeRefreshRef.current = null
+        setLoading(false)
+      }
     }
   }, [documentId])
 
@@ -40,7 +51,7 @@ export function useDocumentPages(documentId) {
   }, [refresh])
 
   useEffect(() => {
-    if (!['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES'].includes(document?.status)) return undefined
+    if (!['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES', 'INDEXING'].includes(document?.status)) return undefined
     const timer = window.setInterval(refresh, 1500)
     return () => window.clearInterval(timer)
   }, [document?.status, refresh])

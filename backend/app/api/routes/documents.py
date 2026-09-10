@@ -3,8 +3,8 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -15,15 +15,18 @@ from app.models.page import Page
 from app.schemas.document import DocumentResponse, DocumentUploadResponse
 from app.schemas.entity import EntityResponse
 from app.schemas.page import OcrBlockResponse, PageDetailResponse, PageResponse
+from app.schemas.search import SearchRequest, SearchResponse, SearchResultResponse
 from app.services.document_service import (
     DocumentPersistenceError,
     UploadValidationError,
     store_uploaded_document,
 )
 from app.services.entity_service import process_document_entities
+from app.services.export_service import ExportFormat, build_document_export
 from app.services.page_service import convert_document_pages, get_document_pages
 from app.services.preprocessing_service import preprocess_document_pages
 from app.services.ocr_service import process_document_ocr
+from app.services.search_service import SearchIndexError, process_document_index, search_document
 
 router = APIRouter(prefix="/documents")
 
@@ -42,6 +45,7 @@ def _document_response(document: Document) -> DocumentResponse:
         page_count=document.page_count,
         ocr_page_count=sum(page.raw_text is not None for page in document.pages),
         entity_count=len(document.entities),
+        indexed_chunk_count=len(document.chunks),
         status=document.status,
         created_at=document.created_at,
         processed_at=document.processed_at,
@@ -57,7 +61,7 @@ def _document_response(document: Document) -> DocumentResponse:
 )
 async def upload_document(
     file: Annotated[UploadFile, File(description="Scanned PDF document")],
-    database: Annotated[Session, Depends(get_db)],
+    database: Annotated[Session, Depends(get_db, scope="function")],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> DocumentUploadResponse:
     try:
@@ -84,7 +88,7 @@ async def upload_document(
 )
 def get_document(
     document_id: UUID,
-    database: Annotated[Session, Depends(get_db)],
+    database: Annotated[Session, Depends(get_db, scope="function")],
 ) -> DocumentResponse:
     return _document_response(_get_document_or_404(database, document_id))
 
@@ -98,7 +102,7 @@ def get_document(
 def process_document(
     document_id: UUID,
     background_tasks: BackgroundTasks,
-    database: Annotated[Session, Depends(get_db)],
+    database: Annotated[Session, Depends(get_db, scope="function")],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> DocumentResponse:
     document = _get_document_or_404(database, document_id)
@@ -107,8 +111,18 @@ def process_document(
     if document.status == DocumentStatus.EXTRACTING_ENTITIES:
         background_tasks.add_task(process_document_entities, document.id, settings)
         return _document_response(document)
-    if document.status in {DocumentStatus.INDEXING, DocumentStatus.COMPLETED}:
-        raise HTTPException(status_code=409, detail="Phase 6 processing is already complete.")
+    if document.status == DocumentStatus.INDEXING:
+        background_tasks.add_task(process_document_index, document.id, settings)
+        return _document_response(document)
+    if document.status == DocumentStatus.COMPLETED:
+        if document.chunks:
+            raise HTTPException(status_code=409, detail="Document processing is already complete.")
+        document.status = DocumentStatus.INDEXING
+        document.error_message = None
+        database.commit()
+        database.refresh(document)
+        background_tasks.add_task(process_document_index, document.id, settings)
+        return _document_response(document)
 
     pages = get_document_pages(database, document_id) if document.page_count > 0 else []
     if pages and all(page.preprocessed_image_path for page in pages) and document.status in {
@@ -156,7 +170,7 @@ def process_document(
 )
 def list_document_pages(
     document_id: UUID,
-    database: Annotated[Session, Depends(get_db)],
+    database: Annotated[Session, Depends(get_db, scope="function")],
 ) -> list[PageResponse]:
     _get_document_or_404(database, document_id)
     return [
@@ -187,7 +201,7 @@ def _entity_response(entity: Entity) -> EntityResponse:
 )
 def list_document_entities(
     document_id: UUID,
-    database: Annotated[Session, Depends(get_db)],
+    database: Annotated[Session, Depends(get_db, scope="function")],
     page_number: int | None = None,
 ) -> list[EntityResponse]:
     _get_document_or_404(database, document_id)
@@ -196,6 +210,72 @@ def list_document_entities(
         query = query.join(Page).filter(Page.page_number == page_number)
     entities = query.order_by(Entity.created_at, Entity.id).all()
     return [_entity_response(entity) for entity in entities]
+
+
+@router.post(
+    "/{document_id}/search",
+    response_model=SearchResponse,
+    summary="Search indexed document text",
+)
+def search_document_text(
+    document_id: UUID,
+    request: SearchRequest,
+    database: Annotated[Session, Depends(get_db, scope="function")],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SearchResponse:
+    document = _get_document_or_404(database, document_id)
+    limit = request.limit or settings.search_default_limit
+    if limit > settings.search_max_limit:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Search limit cannot exceed {settings.search_max_limit}.",
+        )
+    try:
+        matches = search_document(database, document, request.query, limit, settings)
+    except SearchIndexError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    results = [
+        SearchResultResponse(
+            chunk_id=match.chunk_id,
+            page_number=match.page_number,
+            chunk_index=match.chunk_index,
+            content=match.content,
+            text=match.content,
+            score=match.score,
+            source_url=f"/documents/{document_id}/pages/{match.page_number}",
+        )
+        for match in matches
+    ]
+    return SearchResponse(
+        query=" ".join(request.query.split()),
+        result_count=len(results),
+        results=results,
+    )
+
+
+@router.get(
+    "/{document_id}/export",
+    response_class=Response,
+    summary="Export document metadata and extracted information",
+)
+def export_document(
+    document_id: UUID,
+    database: Annotated[Session, Depends(get_db, scope="function")],
+    export_format: Annotated[ExportFormat, Query(alias="format")] = "json",
+) -> Response:
+    document = _get_document_or_404(database, document_id)
+    if document.status != DocumentStatus.COMPLETED:
+        raise HTTPException(
+            status_code=409,
+            detail="Document exports are available after processing completes.",
+        )
+
+    artifact = build_document_export(document, export_format)
+    return Response(
+        content=artifact.content,
+        media_type=artifact.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{artifact.filename}"'},
+    )
 
 
 def _page_response(page: Page, document_id: UUID) -> PageResponse:
@@ -224,7 +304,7 @@ def _page_response(page: Page, document_id: UUID) -> PageResponse:
 def get_document_page(
     document_id: UUID,
     page_number: int,
-    database: Annotated[Session, Depends(get_db)],
+    database: Annotated[Session, Depends(get_db, scope="function")],
 ) -> PageDetailResponse:
     page = database.query(Page).filter_by(
         document_id=document_id, page_number=page_number
@@ -277,7 +357,7 @@ def _png_dimensions(image_path: Path, fallback: tuple[int, int]) -> tuple[int, i
 def get_page_image(
     document_id: UUID,
     page_number: int,
-    database: Annotated[Session, Depends(get_db)],
+    database: Annotated[Session, Depends(get_db, scope="function")],
     settings: Annotated[Settings, Depends(get_settings)],
     variant: Literal["original", "preprocessed"] = "original",
 ) -> FileResponse:

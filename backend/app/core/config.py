@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     ocr_detection_model_dir: Path | None = None
     ocr_recognition_model_dir: Path | None = None
     spacy_model: str = "en_core_web_sm"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_model_directory: Path = Path("models_cache/all-MiniLM-L6-v2")
+    search_index_directory: Path = Path("search_indexes")
+    chunk_size_words: int = 120
+    chunk_overlap_words: int = 25
+    search_default_limit: int = 5
+    search_max_limit: int = 20
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -73,6 +80,20 @@ class Settings(BaseSettings):
             return self.model_cache_directory
         backend_root = Path(__file__).resolve().parents[2]
         return backend_root / self.model_cache_directory
+
+    @property
+    def resolved_embedding_model_directory(self) -> Path:
+        if self.embedding_model_directory.is_absolute():
+            return self.embedding_model_directory
+        backend_root = Path(__file__).resolve().parents[2]
+        return backend_root / self.embedding_model_directory
+
+    @property
+    def resolved_search_index_directory(self) -> Path:
+        if self.search_index_directory.is_absolute():
+            return self.search_index_directory
+        backend_root = Path(__file__).resolve().parents[2]
+        return backend_root / self.search_index_directory
 
 
 @lru_cache

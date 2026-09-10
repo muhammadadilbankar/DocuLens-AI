@@ -2,7 +2,7 @@
 
 DocuLens AI is an offline-first document intelligence platform for scanned financial documents. The project is being built incrementally for the ARCIL document extraction assignment.
 
-## Current milestone: Phase 6
+## Current milestone: Phase 7
 
 The project currently includes:
 
@@ -28,6 +28,8 @@ The project currently includes:
 - Local spaCy named-entity recognition combined with financial-document regex extractors
 - Persistent names, organizations, locations, dates, monetary values, account identifiers, PAN, GSTIN, IFSC, email, phone, percentage, and PIN-code results
 - Document-wide and page-level entity panels with source-page traceability
+- A polished three-panel document workspace with a scrollable page rail, focused page preview, and tabbed insights
+- In-workspace previous/next navigation, original/enhanced image switching, OCR confidence, live processing state, and document metadata
 
 Semantic search, bounding-box overlays, exports, and Docker are intentionally reserved for later phases.
 
@@ -107,7 +109,7 @@ npm.cmd run dev
 
 Open <http://127.0.0.1:5173>. The dashboard should show **Backend connected** when both applications are running.
 
-Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to a document route containing the new UUID. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, `OCR_PROCESSING`, `EXTRACTING_ENTITIES`, and **Entities ready** stages. The page gallery shows OCR confidence, while the document and page views show locally extracted entities and their source pages. Select a page to inspect its image, OCR text, confidence, region coordinates, and page-specific entities. Original PDFs are stored in `backend/uploads`; generated PNGs are stored under `backend/processed/{document-id}/original` and `backend/processed/{document-id}/preprocessed`.
+Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to the primary document workspace. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, `OCR_PROCESSING`, `EXTRACTING_ENTITIES`, and **Entities ready** stages. Use the left page rail or previous/next controls to navigate, compare original and enhanced scans in the center viewer, and switch the right panel between OCR text, page/document entities, and metadata. The **Inspect** action opens the dedicated page view. Original PDFs are stored in `backend/uploads`; generated PNGs are stored under `backend/processed/{document-id}/original` and `backend/processed/{document-id}/preprocessed`.
 
 ## Run checks
 

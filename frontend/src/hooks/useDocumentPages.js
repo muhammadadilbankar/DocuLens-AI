@@ -19,16 +19,14 @@ export function useDocumentPages(documentId) {
 
   const refresh = useCallback(async () => {
     try {
-      const metadata = await getDocument(documentId)
+      const [metadata, pageData, entityData] = await Promise.all([
+        getDocument(documentId),
+        getDocumentPages(documentId),
+        getDocumentEntities(documentId),
+      ])
       setDocument(metadata)
-      if (metadata.page_count > 0) {
-        const [pageData, entityData] = await Promise.all([
-          getDocumentPages(documentId),
-          getDocumentEntities(documentId),
-        ])
-        setPages(pageData)
-        setEntities(entityData)
-      }
+      setPages(pageData)
+      setEntities(entityData)
       setError('')
     } catch (requestError) {
       setError(getApiErrorMessage(requestError))
@@ -42,10 +40,10 @@ export function useDocumentPages(documentId) {
   }, [refresh])
 
   useEffect(() => {
-    if (!pipelineRequested || !['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES'].includes(document?.status)) return undefined
+    if (!['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES'].includes(document?.status)) return undefined
     const timer = window.setInterval(refresh, 1500)
     return () => window.clearInterval(timer)
-  }, [document?.status, pipelineRequested, refresh])
+  }, [document?.status, refresh])
 
   const startConversion = async () => {
     setStarting(true)

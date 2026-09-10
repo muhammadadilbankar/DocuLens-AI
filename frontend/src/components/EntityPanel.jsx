@@ -7,19 +7,19 @@ const typeStyles = {
   ACCOUNT_NUMBER: 'bg-slate-100 text-slate-700',
 }
 
-function EntityPanel({ entities, showPage = true }) {
+function EntityPanel({ entities, showPage = true, compact = false }) {
   return (
-    <section className="rounded-[1.5rem] border border-ink/10 bg-white/75 p-5 shadow-sm">
+    <section className={compact ? '' : 'rounded-[1.5rem] border border-ink/10 bg-white/75 p-5 shadow-sm'}>
       <div className="flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-moss/60">Local NLP results</p>
-          <h2 className="mt-1 text-xl font-semibold text-ink">Extracted entities</h2>
+          <h2 className={`${compact ? 'text-base' : 'mt-1 text-xl'} font-semibold text-ink`}>Extracted entities</h2>
         </div>
         <span className="rounded-full bg-ink/5 px-3 py-1 text-xs font-bold text-ink/55">{entities.length}</span>
       </div>
 
       {entities.length ? (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className={`mt-5 grid gap-3 ${compact ? '' : 'sm:grid-cols-2 xl:grid-cols-3'}`}>
           {entities.map((entity) => (
             <article key={entity.id} className="rounded-xl border border-ink/10 bg-parchment/45 p-3">
               <div className="flex items-start justify-between gap-2">

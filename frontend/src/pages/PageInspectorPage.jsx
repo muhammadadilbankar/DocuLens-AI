@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import EntityPanel from '../components/EntityPanel.jsx'
 import { getApiErrorMessage, getDocumentPage, getPageImageUrl } from '../services/api.js'
 
 function PageInspectorPage() {
@@ -71,6 +72,7 @@ function PageInspectorPage() {
           </div>
         </aside>
       </div>
+      <div className="mt-6"><EntityPanel entities={page.entities} showPage={false} /></div>
     </div>
   )
 }

@@ -49,3 +49,8 @@ class Document(Base):
         passive_deletes=True,
         order_by="Page.page_number",
     )
+    entities: Mapped[list["Entity"]] = relationship(  # noqa: F821
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

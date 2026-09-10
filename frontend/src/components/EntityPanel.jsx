@@ -1,0 +1,45 @@
+const typeStyles = {
+  PERSON: 'bg-sky-100 text-sky-800',
+  ORGANIZATION: 'bg-violet-100 text-violet-800',
+  LOCATION: 'bg-emerald-100 text-emerald-800',
+  MONEY: 'bg-lime/50 text-ink',
+  DATE: 'bg-amber-100 text-amber-800',
+  ACCOUNT_NUMBER: 'bg-slate-100 text-slate-700',
+}
+
+function EntityPanel({ entities, showPage = true }) {
+  return (
+    <section className="rounded-[1.5rem] border border-ink/10 bg-white/75 p-5 shadow-sm">
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-moss/60">Local NLP results</p>
+          <h2 className="mt-1 text-xl font-semibold text-ink">Extracted entities</h2>
+        </div>
+        <span className="rounded-full bg-ink/5 px-3 py-1 text-xs font-bold text-ink/55">{entities.length}</span>
+      </div>
+
+      {entities.length ? (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {entities.map((entity) => (
+            <article key={entity.id} className="rounded-xl border border-ink/10 bg-parchment/45 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <span className={`rounded-full px-2 py-1 text-[9px] font-bold tracking-wide ${typeStyles[entity.entity_type] ?? 'bg-ink/5 text-ink/60'}`}>
+                  {entity.entity_type.replaceAll('_', ' ')}
+                </span>
+                {showPage && <span className="text-[10px] font-semibold text-ink/35">Page {entity.page_number}</span>}
+              </div>
+              <p className="mt-2 break-words text-sm font-semibold text-ink">{entity.entity_value}</p>
+              <p className="mt-1 text-[10px] uppercase tracking-wide text-ink/35">
+                {entity.source}{entity.confidence !== null ? ` · ${Math.round(entity.confidence * 100)}%` : ''}
+              </p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm leading-6 text-ink/45">No entities have been extracted yet.</p>
+      )}
+    </section>
+  )
+}
+
+export default EntityPanel

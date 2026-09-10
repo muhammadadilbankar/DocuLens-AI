@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   getApiErrorMessage,
   getDocument,
+  getDocumentEntities,
   getDocumentPages,
   processDocument,
 } from '../services/api.js'
@@ -10,6 +11,7 @@ import {
 export function useDocumentPages(documentId) {
   const [document, setDocument] = useState(null)
   const [pages, setPages] = useState([])
+  const [entities, setEntities] = useState([])
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
   const [pipelineRequested, setPipelineRequested] = useState(false)
@@ -20,7 +22,12 @@ export function useDocumentPages(documentId) {
       const metadata = await getDocument(documentId)
       setDocument(metadata)
       if (metadata.page_count > 0) {
-        setPages(await getDocumentPages(documentId))
+        const [pageData, entityData] = await Promise.all([
+          getDocumentPages(documentId),
+          getDocumentEntities(documentId),
+        ])
+        setPages(pageData)
+        setEntities(entityData)
       }
       setError('')
     } catch (requestError) {
@@ -35,7 +42,7 @@ export function useDocumentPages(documentId) {
   }, [refresh])
 
   useEffect(() => {
-    if (!pipelineRequested || !['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING'].includes(document?.status)) return undefined
+    if (!pipelineRequested || !['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES'].includes(document?.status)) return undefined
     const timer = window.setInterval(refresh, 1500)
     return () => window.clearInterval(timer)
   }, [document?.status, pipelineRequested, refresh])
@@ -56,6 +63,7 @@ export function useDocumentPages(documentId) {
   return {
     document,
     pages,
+    entities,
     loading,
     starting,
     pipelineRequested,

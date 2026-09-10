@@ -42,3 +42,9 @@ class Page(Base):
         passive_deletes=True,
         order_by="OcrBlock.reading_order",
     )
+    entities: Mapped[list["Entity"]] = relationship(  # noqa: F821
+        back_populates="page",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Entity.created_at",
+    )

@@ -2,7 +2,7 @@
 
 DocuLens AI is an offline-first document intelligence platform for scanned financial documents. The project is being built incrementally for the ARCIL document extraction assignment.
 
-## Current milestone: Phase 5
+## Current milestone: Phase 6
 
 The project currently includes:
 
@@ -25,8 +25,11 @@ The project currently includes:
 - Page-level raw and cleaned OCR text, average confidence, and region bounding boxes
 - Persistent OCR regions in PostgreSQL and a page-by-page inspection screen
 - Visible OCR status and per-page processing progress
+- Local spaCy named-entity recognition combined with financial-document regex extractors
+- Persistent names, organizations, locations, dates, monetary values, account identifiers, PAN, GSTIN, IFSC, email, phone, percentage, and PIN-code results
+- Document-wide and page-level entity panels with source-page traceability
 
-Entity extraction, semantic search, bounding-box overlays, exports, and Docker are intentionally reserved for later phases.
+Semantic search, bounding-box overlays, exports, and Docker are intentionally reserved for later phases.
 
 ## Repository layout
 
@@ -104,7 +107,7 @@ npm.cmd run dev
 
 Open <http://127.0.0.1:5173>. The dashboard should show **Backend connected** when both applications are running.
 
-Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to a document route containing the new UUID. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, `OCR_PROCESSING`, and **OCR complete** stages. The page gallery should show OCR confidence after each page finishes. Select a page to inspect its original/preprocessed image, extracted text, confidence, and saved region coordinates. Original PDFs are stored in `backend/uploads`; generated PNGs are stored under `backend/processed/{document-id}/original` and `backend/processed/{document-id}/preprocessed`.
+Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to a document route containing the new UUID. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, `OCR_PROCESSING`, `EXTRACTING_ENTITIES`, and **Entities ready** stages. The page gallery shows OCR confidence, while the document and page views show locally extracted entities and their source pages. Select a page to inspect its image, OCR text, confidence, region coordinates, and page-specific entities. Original PDFs are stored in `backend/uploads`; generated PNGs are stored under `backend/processed/{document-id}/original` and `backend/processed/{document-id}/preprocessed`.
 
 ## Run checks
 
@@ -128,13 +131,14 @@ Backend settings use the `DOCULENS_` prefix. Frontend variables use Vite's `VITE
 - `POST /documents/{document_id}/process` - starts background conversion and preprocessing
 - `GET /documents/{document_id}/pages` - returns ordered page metadata
 - `GET /documents/{document_id}/pages/{page_number}` - returns page text, confidence, and OCR regions
+- `GET /documents/{document_id}/entities` - returns all stored entities; accepts an optional `page_number` query parameter
 - `GET /documents/{document_id}/pages/{page_number}/image` - serves an original or `?variant=preprocessed` page PNG
 - `GET /health` — reports API health
 - `POST /documents/upload` — accepts one multipart PDF in the `file` field
 
 ## Offline operation
 
-No document content is sent to a cloud inference service. Run `python -m scripts.download_ocr_models` once while online; the lightweight PaddleOCR detection and English recognition models are then stored in the gitignored `backend/models_cache` directory. OCR processing works locally without an internet connection after that cache exists. The final `EXTRACTING_ENTITIES` status currently means Phase 5 OCR is complete and the document is ready for the Phase 6 entity-extraction implementation.
+No document content is sent to a cloud inference service. Run `python -m scripts.download_ocr_models` once while online; the lightweight PaddleOCR detection and English recognition models are then stored in the gitignored `backend/models_cache` directory. The `en_core_web_sm` spaCy pipeline is installed with the Python dependencies. OCR and entity extraction both work locally without an internet connection after setup. The final `INDEXING` status currently means Phase 6 is complete and the document is ready for a later semantic-indexing phase.
 
 ## Planned architecture
 

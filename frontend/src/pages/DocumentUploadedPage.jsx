@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 
 import DocumentStatusBadge from '../components/DocumentStatusBadge.jsx'
+import EntityPanel from '../components/EntityPanel.jsx'
 import PageGallery from '../components/PageGallery.jsx'
 import { useDocumentPages } from '../hooks/useDocumentPages.js'
 
@@ -9,6 +10,7 @@ function DocumentUploadedPage() {
   const {
     document,
     pages,
+    entities,
     loading,
     starting,
     pipelineRequested,
@@ -26,6 +28,8 @@ function DocumentUploadedPage() {
     pages.length > 0 &&
     !pipelineRequested &&
     pages.some((page) => !page.ocr_completed)
+  const isReadyForEntities =
+    document?.status === 'EXTRACTING_ENTITIES' && !pipelineRequested
 
   if (loading) {
     return <div className="mx-auto max-w-7xl px-5 py-20 text-center text-sm font-semibold text-ink/50">Loading document…</div>
@@ -43,25 +47,25 @@ function DocumentUploadedPage() {
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-lime/70">Document workspace</p>
             <h1 className="mt-2 truncate text-3xl font-semibold tracking-tight sm:text-4xl">{document?.original_filename ?? 'Document unavailable'}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55">
-              {document?.status === 'EXTRACTING_ENTITIES'
-                ? 'PaddleOCR finished locally. Select any page to inspect its text, confidence, and source coordinates.'
+              {['INDEXING', 'COMPLETED'].includes(document?.status)
+                ? 'Local OCR and entity extraction are complete. Review names, dates, amounts, identifiers, and their source pages below.'
                 : 'Convert each PDF page, improve scan quality, and preserve both versions for visual comparison.'}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {(document?.status === 'UPLOADED' || document?.status === 'FAILED' || isLegacyPagesReady || isReadyForOcr) && (
+            {(document?.status === 'UPLOADED' || document?.status === 'FAILED' || isLegacyPagesReady || isReadyForOcr || isReadyForEntities) && (
               <button type="button" onClick={startConversion} disabled={starting} className="rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink transition hover:bg-white disabled:cursor-wait disabled:opacity-60">
-                {starting ? 'Starting…' : document.status === 'FAILED' ? 'Retry processing' : isLegacyPagesReady ? 'Preprocess pages' : isReadyForOcr ? 'Run offline OCR' : 'Process document'}
+                {starting ? 'Starting…' : document.status === 'FAILED' ? 'Retry processing' : isLegacyPagesReady ? 'Preprocess pages' : isReadyForOcr ? 'Run offline OCR' : isReadyForEntities ? 'Extract entities' : 'Process document'}
               </button>
             )}
             <Link to="/upload" className="rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">Upload another</Link>
           </div>
         </div>
 
-        {(document?.status === 'CONVERTING' || (['PREPROCESSING', 'OCR_PROCESSING'].includes(document?.status) && pipelineRequested)) && (
+        {(document?.status === 'CONVERTING' || (['PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES'].includes(document?.status) && pipelineRequested)) && (
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4" aria-live="polite">
-            <div className="flex items-center gap-3 text-sm font-semibold"><span className="h-2 w-2 animate-pulse rounded-full bg-lime" />{document.status === 'CONVERTING' ? 'Rendering pages with PyMuPDF…' : document.status === 'PREPROCESSING' ? 'Enhancing pages with OpenCV…' : `Reading pages with PaddleOCR… ${document.ocr_page_count}/${document.page_count}`}</div>
+            <div className="flex items-center gap-3 text-sm font-semibold"><span className="h-2 w-2 animate-pulse rounded-full bg-lime" />{document.status === 'CONVERTING' ? 'Rendering pages with PyMuPDF…' : document.status === 'PREPROCESSING' ? 'Enhancing pages with OpenCV…' : document.status === 'OCR_PROCESSING' ? `Reading pages with PaddleOCR… ${document.ocr_page_count}/${document.page_count}` : `Extracting entities with local NLP… ${document.entity_count} found`}</div>
             <p className="mt-1 pl-5 text-xs text-white/45">Large scanned documents may take a moment. This page updates automatically.</p>
           </div>
         )}
@@ -82,6 +86,7 @@ function DocumentUploadedPage() {
       )}
 
       {pages.length > 0 && <div className="mt-10"><PageGallery documentId={id} pages={pages} /></div>}
+      {pages.length > 0 && <div className="mt-10"><EntityPanel entities={entities} /></div>}
     </div>
   )
 }

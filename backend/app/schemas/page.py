@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.entity import EntityResponse
+
 
 class PageResponse(BaseModel):
     id: UUID
@@ -29,3 +31,4 @@ class PageDetailResponse(PageResponse):
     raw_text: str | None
     cleaned_text: str | None
     ocr_blocks: list[OcrBlockResponse]
+    entities: list[EntityResponse]

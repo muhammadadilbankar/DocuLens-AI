@@ -9,14 +9,17 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.models.document import Document, DocumentStatus
+from app.models.entity import Entity
 from app.models.page import Page
 from app.schemas.document import DocumentResponse, DocumentUploadResponse
+from app.schemas.entity import EntityResponse
 from app.schemas.page import OcrBlockResponse, PageDetailResponse, PageResponse
 from app.services.document_service import (
     DocumentPersistenceError,
     UploadValidationError,
     store_uploaded_document,
 )
+from app.services.entity_service import process_document_entities
 from app.services.page_service import convert_document_pages, get_document_pages
 from app.services.preprocessing_service import preprocess_document_pages
 from app.services.ocr_service import process_document_ocr
@@ -37,6 +40,7 @@ def _document_response(document: Document) -> DocumentResponse:
         original_filename=document.original_filename,
         page_count=document.page_count,
         ocr_page_count=sum(page.raw_text is not None for page in document.pages),
+        entity_count=len(document.entities),
         status=document.status,
         created_at=document.created_at,
         processed_at=document.processed_at,
@@ -88,7 +92,7 @@ def get_document(
     "/{document_id}/process",
     response_model=DocumentResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Start PDF page conversion",
+    summary="Start or resume document processing",
 )
 def process_document(
     document_id: UUID,
@@ -99,12 +103,11 @@ def process_document(
     document = _get_document_or_404(database, document_id)
     if document.status == DocumentStatus.CONVERTING:
         raise HTTPException(status_code=409, detail="Document conversion is already running.")
-    if document.status in {
-        DocumentStatus.EXTRACTING_ENTITIES,
-        DocumentStatus.INDEXING,
-        DocumentStatus.COMPLETED,
-    }:
-        raise HTTPException(status_code=409, detail="Document OCR is already complete.")
+    if document.status == DocumentStatus.EXTRACTING_ENTITIES:
+        background_tasks.add_task(process_document_entities, document.id, settings)
+        return _document_response(document)
+    if document.status in {DocumentStatus.INDEXING, DocumentStatus.COMPLETED}:
+        raise HTTPException(status_code=409, detail="Phase 6 processing is already complete.")
 
     pages = get_document_pages(database, document_id) if document.page_count > 0 else []
     if pages and all(page.preprocessed_image_path for page in pages) and document.status in {
@@ -161,6 +164,39 @@ def list_document_pages(
     ]
 
 
+def _entity_response(entity: Entity) -> EntityResponse:
+    return EntityResponse(
+        id=entity.id,
+        document_id=entity.document_id,
+        page_id=entity.page_id,
+        page_number=entity.page.page_number,
+        entity_type=entity.entity_type,
+        entity_value=entity.entity_value,
+        confidence=entity.confidence,
+        source=entity.source,
+        bounding_box=entity.bounding_box,
+        created_at=entity.created_at,
+    )
+
+
+@router.get(
+    "/{document_id}/entities",
+    response_model=list[EntityResponse],
+    summary="List extracted document entities",
+)
+def list_document_entities(
+    document_id: UUID,
+    database: Annotated[Session, Depends(get_db)],
+    page_number: int | None = None,
+) -> list[EntityResponse]:
+    _get_document_or_404(database, document_id)
+    query = database.query(Entity).filter(Entity.document_id == document_id)
+    if page_number is not None:
+        query = query.join(Page).filter(Page.page_number == page_number)
+    entities = query.order_by(Entity.created_at, Entity.id).all()
+    return [_entity_response(entity) for entity in entities]
+
+
 def _page_response(page: Page, document_id: UUID) -> PageResponse:
     return PageResponse(
         id=page.id,
@@ -211,6 +247,7 @@ def get_document_page(
             )
             for block in page.ocr_blocks
         ],
+        entities=[_entity_response(entity) for entity in page.entities],
     )
 
 

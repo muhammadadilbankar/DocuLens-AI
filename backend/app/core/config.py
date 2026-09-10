@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     ocr_model_source: str = "BOS"
     ocr_detection_model_dir: Path | None = None
     ocr_recognition_model_dir: Path | None = None
+    spacy_model: str = "en_core_web_sm"
 
     model_config = SettingsConfigDict(
         env_file=".env",

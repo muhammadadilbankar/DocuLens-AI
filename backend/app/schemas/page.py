@@ -28,6 +28,8 @@ class OcrBlockResponse(BaseModel):
 
 class PageDetailResponse(PageResponse):
     document_id: UUID
+    ocr_coordinate_width: int
+    ocr_coordinate_height: int
     raw_text: str | None
     cleaned_text: str | None
     ocr_blocks: list[OcrBlockResponse]

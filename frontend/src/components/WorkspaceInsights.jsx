@@ -17,7 +17,7 @@ function DetailRow({ label, value, mono = false }) {
   )
 }
 
-function WorkspaceInsights({ document, page, entities }) {
+function WorkspaceInsights({ document, page, entities, onEntitySelect, selectedEntityId }) {
   const [activeTab, setActiveTab] = useState('text')
   const [entityScope, setEntityScope] = useState('page')
   const pageEntities = page?.entities ?? []
@@ -91,7 +91,14 @@ function WorkspaceInsights({ document, page, entities }) {
                 <button key={scope.id} type="button" aria-pressed={entityScope === scope.id} onClick={() => setEntityScope(scope.id)} className={`flex-1 rounded-full px-2 py-1.5 text-[10px] font-bold transition ${entityScope === scope.id ? 'bg-white text-ink shadow-sm' : 'text-ink/45'}`}>{scope.label}</button>
               ))}
             </div>
-            <EntityPanel entities={visibleEntities} showPage={entityScope === 'document'} compact />
+            <p className="mb-3 text-[10px] leading-4 text-ink/40">Select an entity to reveal its source region on the enhanced page.</p>
+            <EntityPanel
+              entities={visibleEntities}
+              showPage={entityScope === 'document'}
+              compact
+              onEntitySelect={onEntitySelect}
+              selectedEntityId={selectedEntityId}
+            />
           </div>
         ) : null}
 

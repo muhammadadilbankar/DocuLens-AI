@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import DocumentImageOverlay from '../components/DocumentImageOverlay.jsx'
 import EntityPanel from '../components/EntityPanel.jsx'
 import { getApiErrorMessage, getDocumentPage, getPageImageUrl } from '../services/api.js'
 
@@ -9,11 +10,23 @@ function PageInspectorPage() {
   const [page, setPage] = useState(null)
   const [variant, setVariant] = useState('preprocessed')
   const [error, setError] = useState('')
+  const [showOverlays, setShowOverlays] = useState(true)
+  const [highlightedEntity, setHighlightedEntity] = useState(null)
 
   useEffect(() => {
+    let isCurrent = true
+    setPage(null)
+    setError('')
     getDocumentPage(id, pageNumber)
-      .then(setPage)
-      .catch((requestError) => setError(getApiErrorMessage(requestError)))
+      .then((pageData) => {
+        if (isCurrent) setPage(pageData)
+      })
+      .catch((requestError) => {
+        if (isCurrent) setError(getApiErrorMessage(requestError))
+      })
+    return () => {
+      isCurrent = false
+    }
   }, [id, pageNumber])
 
   if (error) {
@@ -26,6 +39,13 @@ function PageInspectorPage() {
   const imagePath = variant === 'preprocessed' && page.preprocessed_image_url
     ? page.preprocessed_image_url
     : page.image_url
+  const canShowOverlays = variant === 'preprocessed' && page.ocr_blocks.length > 0
+
+  const selectEntity = (entity) => {
+    setHighlightedEntity(entity)
+    setVariant('preprocessed')
+    setShowOverlays(true)
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
@@ -41,12 +61,24 @@ function PageInspectorPage() {
               <button key={option} type="button" disabled={option === 'preprocessed' && !page.preprocessed_image_url} onClick={() => setVariant(option)} className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${variant === option ? 'bg-white text-ink shadow-sm' : 'text-ink/45'} disabled:opacity-30`}>{option}</button>
             ))}
           </div>
+          <button type="button" aria-pressed={showOverlays && canShowOverlays} disabled={!canShowOverlays} onClick={() => setShowOverlays((current) => !current)} className={`rounded-full border px-3 py-2 text-xs font-semibold ${showOverlays && canShowOverlays ? 'border-moss bg-lime/30 text-ink' : 'border-ink/10 text-ink/45'} disabled:opacity-30`}>Regions {showOverlays && canShowOverlays ? 'on' : 'off'}</button>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <section className="overflow-hidden rounded-[1.5rem] border border-ink/10 bg-ink/5 p-3">
-          <img src={getPageImageUrl(imagePath)} alt={`${variant} page ${page.page_number}`} className="mx-auto h-auto max-h-[78vh] max-w-full rounded-xl bg-white object-contain shadow-lift" />
+          <div className="grid min-h-[30rem] place-items-center">
+            <DocumentImageOverlay
+              src={getPageImageUrl(imagePath)}
+              alt={`${variant} page ${page.page_number}`}
+              coordinateWidth={page.ocr_coordinate_width}
+              coordinateHeight={page.ocr_coordinate_height}
+              regions={page.ocr_blocks}
+              highlightedBox={highlightedEntity?.bounding_box}
+              overlaysEnabled={canShowOverlays && showOverlays}
+              imageClassName="max-h-[78vh] rounded-xl bg-white object-contain shadow-lift"
+            />
+          </div>
         </section>
         <aside className="overflow-hidden rounded-[1.5rem] border border-ink/10 bg-white/75 shadow-lift backdrop-blur">
           <div className="border-b border-ink/10 p-5">
@@ -72,7 +104,7 @@ function PageInspectorPage() {
           </div>
         </aside>
       </div>
-      <div className="mt-6"><EntityPanel entities={page.entities} showPage={false} /></div>
+      <div className="mt-6"><EntityPanel entities={page.entities} showPage={false} onEntitySelect={selectEntity} selectedEntityId={highlightedEntity?.id} /></div>
     </div>
   )
 }

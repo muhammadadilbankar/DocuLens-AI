@@ -2,7 +2,7 @@
 
 DocuLens AI is an offline-first document intelligence platform for scanned financial documents. The project is being built incrementally for the ARCIL document extraction assignment.
 
-## Current milestone: Phase 7
+## Current milestone: Phase 8
 
 The project currently includes:
 
@@ -30,6 +30,9 @@ The project currently includes:
 - Document-wide and page-level entity panels with source-page traceability
 - A polished three-panel document workspace with a scrollable page rail, focused page preview, and tabbed insights
 - In-workspace previous/next navigation, original/enhanced image switching, OCR confidence, live processing state, and document metadata
+- Scale-aware OCR bounding-box overlays aligned to the enhanced page image
+- Hover and keyboard-focus OCR tooltips showing region text and confidence
+- Clickable entity cards that navigate to and highlight their source region where coordinates are available
 
 Semantic search, bounding-box overlays, exports, and Docker are intentionally reserved for later phases.
 
@@ -109,7 +112,7 @@ npm.cmd run dev
 
 Open <http://127.0.0.1:5173>. The dashboard should show **Backend connected** when both applications are running.
 
-Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to the primary document workspace. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, `OCR_PROCESSING`, `EXTRACTING_ENTITIES`, and **Entities ready** stages. Use the left page rail or previous/next controls to navigate, compare original and enhanced scans in the center viewer, and switch the right panel between OCR text, page/document entities, and metadata. The **Inspect** action opens the dedicated page view. Original PDFs are stored in `backend/uploads`; generated PNGs are stored under `backend/processed/{document-id}/original` and `backend/processed/{document-id}/preprocessed`.
+Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to the primary document workspace. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, `OCR_PROCESSING`, `EXTRACTING_ENTITIES`, and **Entities ready** stages. Use the left page rail or previous/next controls to navigate, then enable **Regions** on the enhanced image. Hover or keyboard-focus a region to see its OCR text and confidence. In the Entities tab, select a page or document entity to navigate to and highlight its source area. Overlays are intentionally disabled on the original image because preprocessing resize and deskew operations can change its coordinate system. The **Inspect** action opens the dedicated page view with the same verification controls.
 
 ## Run checks
 

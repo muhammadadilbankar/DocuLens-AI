@@ -1,3 +1,4 @@
+import struct
 from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
@@ -232,9 +233,15 @@ def get_document_page(
         raise HTTPException(status_code=404, detail="Document page not found.")
 
     summary = _page_response(page, document_id)
+    coordinate_width, coordinate_height = _png_dimensions(
+        Path(page.preprocessed_image_path or page.original_image_path),
+        fallback=(page.image_width, page.image_height),
+    )
     return PageDetailResponse(
         **summary.model_dump(),
         document_id=document_id,
+        ocr_coordinate_width=coordinate_width,
+        ocr_coordinate_height=coordinate_height,
         raw_text=page.raw_text,
         cleaned_text=page.cleaned_text,
         ocr_blocks=[
@@ -249,6 +256,17 @@ def get_document_page(
         ],
         entities=[_entity_response(entity) for entity in page.entities],
     )
+
+
+def _png_dimensions(image_path: Path, fallback: tuple[int, int]) -> tuple[int, int]:
+    try:
+        with image_path.open("rb") as image_file:
+            header = image_file.read(24)
+        if len(header) == 24 and header[:8] == b"\x89PNG\r\n\x1a\n":
+            return struct.unpack(">II", header[16:24])
+    except OSError:
+        pass
+    return fallback
 
 
 @router.get(

@@ -35,6 +35,8 @@ function DocumentUploadedPage() {
   const [pageLoading, setPageLoading] = useState(false)
   const [pageError, setPageError] = useState('')
   const [variant, setVariant] = useState('preprocessed')
+  const [showOverlays, setShowOverlays] = useState(true)
+  const [highlightedEntity, setHighlightedEntity] = useState(null)
 
   useEffect(() => {
     if (pages.length && !pages.some((page) => page.page_number === selectedPageNumber)) {
@@ -78,6 +80,18 @@ function DocumentUploadedPage() {
         : isReadyForEntities
           ? 'Extract entities'
           : 'Process document'
+
+  const selectPage = (pageNumber) => {
+    setHighlightedEntity(null)
+    setSelectedPageNumber(pageNumber)
+  }
+
+  const selectEntity = (entity) => {
+    setHighlightedEntity(entity)
+    setSelectedPageNumber(entity.page_number)
+    setVariant('preprocessed')
+    setShowOverlays(true)
+  }
 
   if (loading) {
     return <div className="mx-auto max-w-7xl px-5 py-20 text-center text-sm font-semibold text-ink/50">Loading document…</div>
@@ -141,19 +155,28 @@ function DocumentUploadedPage() {
 
       {pages.length ? (
         <div className="mt-5 grid items-start gap-4 lg:grid-cols-[11.5rem_minmax(0,1fr)_23rem] xl:grid-cols-[12.5rem_minmax(0,1fr)_26rem]">
-          <WorkspacePageRail pages={pages} selectedPageNumber={selectedPageNumber} onSelect={setSelectedPageNumber} />
+          <WorkspacePageRail pages={pages} selectedPageNumber={selectedPageNumber} onSelect={selectPage} />
           <WorkspaceDocumentViewer
             documentId={id}
             page={selectedPage}
             loading={pageLoading}
             variant={variant}
             onVariantChange={setVariant}
-            onPrevious={() => setSelectedPageNumber(pages[selectedIndex - 1].page_number)}
-            onNext={() => setSelectedPageNumber(pages[selectedIndex + 1].page_number)}
+            onPrevious={() => selectPage(pages[selectedIndex - 1].page_number)}
+            onNext={() => selectPage(pages[selectedIndex + 1].page_number)}
             hasPrevious={selectedIndex > 0}
             hasNext={selectedIndex >= 0 && selectedIndex < pages.length - 1}
+            showOverlays={showOverlays}
+            onToggleOverlays={() => setShowOverlays((current) => !current)}
+            highlightedEntity={highlightedEntity}
           />
-          <WorkspaceInsights document={document} page={selectedPage} entities={entities} />
+          <WorkspaceInsights
+            document={document}
+            page={selectedPage}
+            entities={entities}
+            onEntitySelect={selectEntity}
+            selectedEntityId={highlightedEntity?.id}
+          />
         </div>
       ) : (
         <section className="mt-5 grid min-h-80 place-items-center rounded-[1.5rem] border border-dashed border-ink/15 bg-white/45 p-8 text-center">

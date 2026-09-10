@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Integer, String, Text, func
+from sqlalchemy import DateTime, Enum, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,12 +22,16 @@ class DocumentStatus(str, enum.Enum):
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        UniqueConstraint("stored_filename", name="uq_documents_stored_filename"),
+        Index("ix_documents_created_at", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
-    stored_filename: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    stored_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     page_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[DocumentStatus] = mapped_column(

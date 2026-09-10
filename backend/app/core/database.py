@@ -1,5 +1,9 @@
 from collections.abc import Generator
+from pathlib import Path
 
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -23,7 +27,17 @@ def get_db() -> Generator[Session, None, None]:
         database.close()
 
 
-def initialize_database() -> None:
-    from app.models import document, document_chunk, entity, ocr_block, page  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)
+def verify_database_revision() -> None:
+    backend_root = Path(__file__).resolve().parents[2]
+    alembic_config = Config(str(backend_root / "alembic.ini"))
+    migrations = ScriptDirectory.from_config(alembic_config)
+    expected_heads = set(migrations.get_heads())
+    with engine.connect() as connection:
+        current_heads = set(MigrationContext.configure(connection).get_current_heads())
+    if current_heads != expected_heads:
+        current = ", ".join(sorted(current_heads)) or "unversioned"
+        expected = ", ".join(sorted(expected_heads))
+        raise RuntimeError(
+            f"Database revision is {current}; expected {expected}. "
+            "Run 'alembic upgrade head' from the backend directory."
+        )

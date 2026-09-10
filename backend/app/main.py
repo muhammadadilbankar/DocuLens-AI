@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
-from app.core.database import initialize_database
+from app.core.database import verify_database_revision
 
 
 @asynccontextmanager
@@ -14,7 +14,7 @@ async def lifespan(_: FastAPI):
     settings.resolved_upload_directory.mkdir(parents=True, exist_ok=True)
     settings.resolved_processed_directory.mkdir(parents=True, exist_ok=True)
     settings.resolved_search_index_directory.mkdir(parents=True, exist_ok=True)
-    initialize_database()
+    verify_database_revision()
     yield
 
 

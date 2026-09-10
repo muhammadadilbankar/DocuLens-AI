@@ -2,7 +2,7 @@
 
 DocuLens AI is an offline-first document intelligence platform for scanned financial documents. The project is being built incrementally for the ARCIL document extraction assignment.
 
-## Current milestone: Phase 10
+## Current milestone: Phase 11
 
 The project currently includes:
 
@@ -40,8 +40,12 @@ The project currently includes:
 - Excel-friendly CSV entity exports with document and source-page traceability
 - Readable plain-text exports containing page-by-page OCR and an extracted-entity appendix
 - Workspace export controls that download completed documents without leaving derivative files on the server
+- Alembic-managed PostgreSQL schema with a tested baseline and incremental hardening migration
+- Database-level cascade deletion across pages, OCR blocks, entities, and search chunks
+- Indexed document creation and document-scoped entity ordering for common lookups
+- Backend startup validation that rejects an outdated or unversioned database schema
 
-Persistence hardening, database migrations, Docker, and final testing polish are intentionally reserved for later phases.
+Docker and final testing polish are intentionally reserved for later phases.
 
 ## Repository layout
 
@@ -78,7 +82,23 @@ Create an empty PostgreSQL database named `doculens` using pgAdmin or the Postgr
 createdb -U postgres doculens
 ```
 
-Copy `backend/.env.example` to `backend/.env`, then replace `change-me` in `DOCULENS_DATABASE_URL` with your PostgreSQL password. If your username, host, port, or database name differs, update those values as well. The backend creates the current `documents` and `pages` tables when it starts; Alembic migrations are planned for the persistence-hardening phase.
+Copy `backend/.env.example` to `backend/.env`, then replace `change-me` in `DOCULENS_DATABASE_URL` with your PostgreSQL password. If your username, host, port, or database name differs, update those values as well.
+
+For a new empty database, create the complete schema with:
+
+```powershell
+cd backend
+.\.venv\Scripts\alembic.exe upgrade head
+```
+
+This workspace's existing database has already been adopted and upgraded to the Phase 11 head. For another pre-Phase-11 database whose tables were created by this application, adopt the existing Phase 10 schema once, then upgrade it:
+
+```powershell
+.\.venv\Scripts\alembic.exe stamp 20260910_01
+.\.venv\Scripts\alembic.exe upgrade head
+```
+
+Do not stamp an unknown or manually modified database; inspect or migrate it explicitly first. Backend startup now verifies that the database is at the current Alembic head.
 
 ## Run the backend
 
@@ -93,6 +113,7 @@ python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 python -m scripts.download_ocr_models
 python -m scripts.download_embedding_model
+alembic upgrade head
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 

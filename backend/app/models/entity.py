@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, JSON, String, Text, func
+from sqlalchemy import DateTime, Float, ForeignKey, Index, JSON, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,6 +10,9 @@ from app.core.database import Base
 
 class Entity(Base):
     __tablename__ = "entities"
+    __table_args__ = (
+        Index("ix_entities_document_created_id", "document_id", "created_at", "id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

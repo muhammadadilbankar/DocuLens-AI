@@ -24,3 +24,10 @@ class DocumentResponse(BaseModel):
     created_at: datetime
     processed_at: datetime | None
     error_message: str | None
+
+
+class DocumentDeleteResponse(BaseModel):
+    document_id: UUID
+    deleted: bool
+    removed_artifacts: list[str]
+    cleanup_warnings: list[str]

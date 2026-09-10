@@ -1,5 +1,7 @@
+import shutil
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import UploadFile
 from sqlalchemy.exc import SQLAlchemyError
@@ -21,6 +23,17 @@ class UploadValidationError(ValueError):
 
 class DocumentPersistenceError(RuntimeError):
     pass
+
+
+class DocumentDeletionError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class DocumentDeletionResult:
+    document_id: UUID
+    removed_artifacts: list[str]
+    cleanup_warnings: list[str]
 
 
 def _safe_original_filename(filename: str | None) -> str:
@@ -90,3 +103,106 @@ async def store_uploaded_document(
         ) from exc
     finally:
         await upload.close()
+
+
+def delete_stored_document(
+    document: Document,
+    database: Session,
+    settings: Settings,
+) -> DocumentDeletionResult:
+    document_id = document.id
+    uploaded_pdf = Path(document.file_path)
+    processed_directory = settings.resolved_processed_directory / str(document_id)
+    search_index = settings.resolved_search_index_directory / f"{document_id}.faiss"
+
+    try:
+        database.delete(document)
+        database.commit()
+    except SQLAlchemyError as exc:
+        database.rollback()
+        raise DocumentDeletionError(
+            "The document database record could not be deleted. No files were removed."
+        ) from exc
+
+    removed_artifacts: list[str] = []
+    cleanup_warnings: list[str] = []
+    _remove_file_within_root(
+        uploaded_pdf,
+        settings.resolved_upload_directory,
+        "uploaded PDF",
+        removed_artifacts,
+        cleanup_warnings,
+    )
+    _remove_directory_within_root(
+        processed_directory,
+        settings.resolved_processed_directory,
+        "processed page images",
+        removed_artifacts,
+        cleanup_warnings,
+    )
+    _remove_file_within_root(
+        search_index,
+        settings.resolved_search_index_directory,
+        "FAISS search index",
+        removed_artifacts,
+        cleanup_warnings,
+    )
+    search_root = settings.resolved_search_index_directory.resolve()
+    if search_root.is_dir():
+        for temporary_index in search_root.glob(f".{document_id}.*.tmp"):
+            _remove_file_within_root(
+                temporary_index,
+                search_root,
+                "temporary FAISS index",
+                removed_artifacts,
+                cleanup_warnings,
+            )
+    return DocumentDeletionResult(document_id, removed_artifacts, cleanup_warnings)
+
+
+def _remove_file_within_root(
+    candidate: Path,
+    root: Path,
+    label: str,
+    removed: list[str],
+    warnings: list[str],
+) -> None:
+    resolved_root = root.resolve()
+    resolved_candidate = candidate.resolve()
+    if resolved_candidate == resolved_root or not resolved_candidate.is_relative_to(
+        resolved_root
+    ):
+        warnings.append(f"Skipped unsafe path for {label}.")
+        return
+    if not resolved_candidate.exists():
+        return
+    try:
+        resolved_candidate.unlink()
+        removed.append(label)
+    except OSError:
+        warnings.append(f"Could not remove {label}.")
+
+
+def _remove_directory_within_root(
+    candidate: Path,
+    root: Path,
+    label: str,
+    removed: list[str],
+    warnings: list[str],
+) -> None:
+    resolved_root = root.resolve()
+    resolved_candidate = candidate.resolve()
+    if (
+        resolved_candidate == resolved_root
+        or resolved_candidate.parent != resolved_root
+        or not resolved_candidate.is_relative_to(resolved_root)
+    ):
+        warnings.append(f"Skipped unsafe path for {label}.")
+        return
+    if not resolved_candidate.exists():
+        return
+    try:
+        shutil.rmtree(resolved_candidate)
+        removed.append(label)
+    except OSError:
+        warnings.append(f"Could not remove {label}.")

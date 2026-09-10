@@ -29,8 +29,18 @@ export async function getDocument(documentId) {
   return data
 }
 
+export async function getDocuments() {
+  const { data } = await api.get('/documents')
+  return data
+}
+
 export async function processDocument(documentId) {
   const { data } = await api.post(`/documents/${documentId}/process`)
+  return data
+}
+
+export async function deleteDocument(documentId) {
+  const { data } = await api.delete(`/documents/${documentId}`, { timeout: 30000 })
   return data
 }
 

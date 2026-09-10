@@ -44,6 +44,8 @@ The project currently includes:
 - Database-level cascade deletion across pages, OCR blocks, entities, and search chunks
 - Indexed document creation and document-scoped entity ordering for common lookups
 - Backend startup validation that rejects an outdated or unversioned database schema
+- Confirmed document deletion with database cascades and guarded cleanup of the uploaded PDF, page images, and FAISS index
+- Dashboard document history with status, extraction counts, workspace links, and per-document deletion controls
 
 Docker and final testing polish are intentionally reserved for later phases.
 
@@ -165,7 +167,9 @@ Backend settings use the `DOCULENS_` prefix. Frontend variables use Vite's `VITE
 
 ## Current API
 
+- `GET /documents` - lists all retained uploads newest first
 - `GET /documents/{document_id}` - returns metadata and conversion status
+- `DELETE /documents/{document_id}` - permanently deletes an idle document and its local artifacts
 - `POST /documents/{document_id}/process` - starts background conversion and preprocessing
 - `GET /documents/{document_id}/pages` - returns ordered page metadata
 - `GET /documents/{document_id}/pages/{page_number}` - returns page text, confidence, and OCR regions

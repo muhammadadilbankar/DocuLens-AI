@@ -5,20 +5,24 @@ from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import selectinload
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.models.document import Document, DocumentStatus
 from app.models.entity import Entity
 from app.models.page import Page
-from app.schemas.document import DocumentResponse, DocumentUploadResponse
+from app.schemas.document import DocumentDeleteResponse, DocumentResponse, DocumentUploadResponse
 from app.schemas.entity import EntityResponse
 from app.schemas.page import OcrBlockResponse, PageDetailResponse, PageResponse
 from app.schemas.search import SearchRequest, SearchResponse, SearchResultResponse
 from app.services.document_service import (
+    DocumentDeletionError,
     DocumentPersistenceError,
     UploadValidationError,
+    delete_stored_document,
     store_uploaded_document,
 )
 from app.services.entity_service import process_document_entities
@@ -82,6 +86,27 @@ async def upload_document(
 
 
 @router.get(
+    "",
+    response_model=list[DocumentResponse],
+    summary="List uploaded documents",
+)
+def list_documents(
+    database: Annotated[Session, Depends(get_db, scope="function")],
+) -> list[DocumentResponse]:
+    statement = (
+        select(Document)
+        .options(
+            selectinload(Document.pages),
+            selectinload(Document.entities),
+            selectinload(Document.chunks),
+        )
+        .order_by(Document.created_at.desc(), Document.id.desc())
+    )
+    documents = database.scalars(statement).all()
+    return [_document_response(document) for document in documents]
+
+
+@router.get(
     "/{document_id}",
     response_model=DocumentResponse,
     summary="Get document metadata",
@@ -91,6 +116,41 @@ def get_document(
     database: Annotated[Session, Depends(get_db, scope="function")],
 ) -> DocumentResponse:
     return _document_response(_get_document_or_404(database, document_id))
+
+
+@router.delete(
+    "/{document_id}",
+    response_model=DocumentDeleteResponse,
+    summary="Permanently delete a document and its local artifacts",
+)
+def delete_document(
+    document_id: UUID,
+    database: Annotated[Session, Depends(get_db, scope="function")],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> DocumentDeleteResponse:
+    document = _get_document_or_404(database, document_id)
+    active_statuses = {
+        DocumentStatus.CONVERTING,
+        DocumentStatus.PREPROCESSING,
+        DocumentStatus.OCR_PROCESSING,
+        DocumentStatus.EXTRACTING_ENTITIES,
+        DocumentStatus.INDEXING,
+    }
+    if document.status in active_statuses:
+        raise HTTPException(
+            status_code=409,
+            detail="Wait for document processing to finish before deleting it.",
+        )
+    try:
+        result = delete_stored_document(document, database, settings)
+    except DocumentDeletionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return DocumentDeleteResponse(
+        document_id=result.document_id,
+        deleted=True,
+        removed_artifacts=result.removed_artifacts,
+        cleanup_warnings=result.cleanup_warnings,
+    )
 
 
 @router.post(

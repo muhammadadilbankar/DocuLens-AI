@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import DocumentStatusBadge from '../components/DocumentStatusBadge.jsx'
 import WorkspaceDocumentViewer from '../components/WorkspaceDocumentViewer.jsx'
 import WorkspaceInsights from '../components/WorkspaceInsights.jsx'
 import WorkspacePageRail from '../components/WorkspacePageRail.jsx'
 import { useDocumentPages } from '../hooks/useDocumentPages.js'
-import { getApiErrorMessage, getDocumentExport, getDocumentPage } from '../services/api.js'
+import { deleteDocument, getApiErrorMessage, getDocumentExport, getDocumentPage } from '../services/api.js'
 
 const activeStatuses = new Set(['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING', 'EXTRACTING_ENTITIES', 'INDEXING'])
 
@@ -20,6 +20,7 @@ function processingMessage(document) {
 
 function DocumentUploadedPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const {
     document,
     pages,
@@ -41,6 +42,7 @@ function DocumentUploadedPage() {
   const [exportFormat, setExportFormat] = useState('json')
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (pages.length && !pages.some((page) => page.page_number === selectedPageNumber)) {
@@ -124,6 +126,26 @@ function DocumentUploadedPage() {
     }
   }
 
+  const permanentlyDeleteDocument = async () => {
+    const confirmed = window.confirm(
+      'Permanently delete this document, its extracted data, page images, and search index? This cannot be undone.',
+    )
+    if (!confirmed) return
+
+    setDeleting(true)
+    setExportError('')
+    try {
+      const result = await deleteDocument(id)
+      navigate('/', {
+        replace: true,
+        state: { notice: result.cleanup_warnings.length ? result.cleanup_warnings.join(' ') : 'Document deleted.' },
+      })
+    } catch (requestError) {
+      setExportError(getApiErrorMessage(requestError))
+      setDeleting(false)
+    }
+  }
+
   if (loading) {
     return <div className="mx-auto max-w-7xl px-5 py-20 text-center text-sm font-semibold text-ink/50">Loading document…</div>
   }
@@ -158,6 +180,7 @@ function DocumentUploadedPage() {
               </div>
             ) : null}
             <button type="button" onClick={refresh} className="rounded-full border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">Refresh</button>
+            {!isProcessing ? <button type="button" onClick={permanentlyDeleteDocument} disabled={deleting} className="rounded-full border border-rose-300/30 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20 disabled:cursor-wait disabled:opacity-50">{deleting ? 'Deleting…' : 'Delete'}</button> : null}
             <Link to="/upload" className="rounded-full border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">Upload another</Link>
           </div>
         </div>

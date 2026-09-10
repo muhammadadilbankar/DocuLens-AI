@@ -10,4 +10,5 @@ class PageResponse(BaseModel):
     image_width: int
     image_height: int
     image_url: str
+    preprocessed_image_url: str | None
     created_at: datetime

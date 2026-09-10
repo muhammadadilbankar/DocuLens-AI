@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
@@ -18,6 +18,7 @@ from app.services.document_service import (
     store_uploaded_document,
 )
 from app.services.page_service import convert_document_pages, get_document_pages
+from app.services.preprocessing_service import preprocess_document_pages
 
 router = APIRouter(prefix="/documents")
 
@@ -96,8 +97,22 @@ def process_document(
     document = _get_document_or_404(database, document_id)
     if document.status == DocumentStatus.CONVERTING:
         raise HTTPException(status_code=409, detail="Document conversion is already running.")
+    if document.status == DocumentStatus.OCR_PROCESSING:
+        raise HTTPException(status_code=409, detail="Document pages are already ready for OCR.")
+
     if document.page_count > 0:
-        raise HTTPException(status_code=409, detail="Document pages have already been converted.")
+        if document.status not in {DocumentStatus.PREPROCESSING, DocumentStatus.FAILED}:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Document cannot be preprocessed while status is {document.status.value}.",
+            )
+        document.status = DocumentStatus.PREPROCESSING
+        document.error_message = None
+        database.commit()
+        database.refresh(document)
+        background_tasks.add_task(preprocess_document_pages, document.id, settings)
+        return _document_response(document)
+
     if document.status not in {DocumentStatus.UPLOADED, DocumentStatus.FAILED}:
         raise HTTPException(
             status_code=409,
@@ -129,6 +144,11 @@ def list_document_pages(
             image_width=page.image_width,
             image_height=page.image_height,
             image_url=f"/documents/{document_id}/pages/{page.page_number}/image",
+            preprocessed_image_url=(
+                f"/documents/{document_id}/pages/{page.page_number}/image?variant=preprocessed"
+                if page.preprocessed_image_path
+                else None
+            ),
             created_at=page.created_at,
         )
         for page in get_document_pages(database, document_id)
@@ -145,6 +165,7 @@ def get_page_image(
     page_number: int,
     database: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    variant: Literal["original", "preprocessed"] = "original",
 ) -> FileResponse:
     page = database.query(Page).filter_by(
         document_id=document_id, page_number=page_number
@@ -152,7 +173,14 @@ def get_page_image(
     if page is None:
         raise HTTPException(status_code=404, detail="Document page not found.")
 
-    image_path = Path(page.original_image_path).resolve()
+    selected_path = (
+        page.preprocessed_image_path
+        if variant == "preprocessed"
+        else page.original_image_path
+    )
+    if not selected_path:
+        raise HTTPException(status_code=404, detail="Preprocessed page image not found.")
+    image_path = Path(selected_path).resolve()
     processed_root = settings.resolved_processed_directory.resolve()
     if not image_path.is_relative_to(processed_root) or not image_path.is_file():
         raise HTTPException(status_code=404, detail="Document page image not found.")

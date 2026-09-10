@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     processed_directory: Path = Path("processed")
     max_upload_size_mb: int = 50
     pdf_render_dpi: int = 150
+    preprocessing_min_width: int = 1600
+    denoise_strength: int = 7
+    max_deskew_angle: float = 5.0
 
     model_config = SettingsConfigDict(
         env_file=".env",

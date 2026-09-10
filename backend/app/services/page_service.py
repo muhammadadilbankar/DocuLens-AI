@@ -9,12 +9,14 @@ from app.core.database import SessionLocal
 from app.models.document import Document, DocumentStatus
 from app.models.page import Page
 from app.services.pdf_service import RenderedPage, render_pdf_pages
+from app.services.preprocessing_service import preprocess_document_pages
 
 logger = logging.getLogger(__name__)
 
 
 def convert_document_pages(document_id: uuid.UUID, settings: Settings) -> None:
     rendered_pages: list[RenderedPage] = []
+    conversion_succeeded = False
     with SessionLocal() as database:
         document = database.get(Document, document_id)
         if document is None:
@@ -47,6 +49,7 @@ def convert_document_pages(document_id: uuid.UUID, settings: Settings) -> None:
             document.status = DocumentStatus.PREPROCESSING
             document.error_message = None
             database.commit()
+            conversion_succeeded = True
         except Exception as exc:
             database.rollback()
             _remove_page_files(rendered_pages)
@@ -56,6 +59,9 @@ def convert_document_pages(document_id: uuid.UUID, settings: Settings) -> None:
                 failed_document.error_message = str(exc)[:2000]
                 database.commit()
             logger.exception("Page conversion failed for document %s", document_id)
+
+    if conversion_succeeded:
+        preprocess_document_pages(document_id, settings)
 
 
 def get_document_pages(database, document_id: uuid.UUID) -> list[Page]:

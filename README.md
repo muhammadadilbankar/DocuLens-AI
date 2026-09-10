@@ -2,7 +2,7 @@
 
 DocuLens AI is an offline-first document intelligence platform for scanned financial documents. The project is being built incrementally for the ARCIL document extraction assignment.
 
-## Current milestone: Phase 3
+## Current milestone: Phase 4
 
 The project currently includes:
 
@@ -18,8 +18,11 @@ The project currently includes:
 - Ordered page-level PostgreSQL records with image dimensions
 - UUID-scoped local page images and API delivery paths
 - Automatic conversion status polling and a responsive page thumbnail grid
+- Configurable OpenCV preprocessing with grayscale conversion, CLAHE contrast enhancement, mild denoising, adaptive thresholding, resizing, and guarded deskewing
+- Separate preservation and delivery of original and preprocessed page images
+- Original/preprocessed comparison control in the frontend page gallery
 
-Image preprocessing, OCR, entity extraction, semantic search, exports, and Docker are intentionally reserved for later phases.
+OCR, entity extraction, semantic search, exports, and Docker are intentionally reserved for later phases.
 
 ## Repository layout
 
@@ -95,7 +98,7 @@ npm.cmd run dev
 
 Open <http://127.0.0.1:5173>. The dashboard should show **Backend connected** when both applications are running.
 
-Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to a document route containing the new UUID. Choose **Convert PDF pages** and verify that the status changes from `CONVERTING` to **Pages ready**. The ordered page thumbnails should then appear. Original PDFs are stored in `backend/uploads`; generated PNGs are stored under `backend/processed/{document-id}/original`.
+Open the Upload page, select a genuine PDF no larger than 50 MB, and choose **Upload document**. A successful upload navigates to a document route containing the new UUID. Choose **Process document** and verify the `CONVERTING`, `PREPROCESSING`, and **Ready for OCR** stages. The ordered page thumbnails should appear, and the gallery control should switch between original and preprocessed images. Original PDFs are stored in `backend/uploads`; generated PNGs are stored under `backend/processed/{document-id}/original` and `backend/processed/{document-id}/preprocessed`.
 
 ## Run checks
 
@@ -116,9 +119,9 @@ Backend settings use the `DOCULENS_` prefix. Frontend variables use Vite's `VITE
 ## Current API
 
 - `GET /documents/{document_id}` - returns metadata and conversion status
-- `POST /documents/{document_id}/process` - starts background page conversion
+- `POST /documents/{document_id}/process` - starts background conversion and preprocessing
 - `GET /documents/{document_id}/pages` - returns ordered page metadata
-- `GET /documents/{document_id}/pages/{page_number}/image` - serves a rendered page PNG
+- `GET /documents/{document_id}/pages/{page_number}/image` - serves an original or `?variant=preprocessed` page PNG
 - `GET /health` — reports API health
 - `POST /documents/upload` — accepts one multipart PDF in the `file` field
 

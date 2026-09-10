@@ -24,6 +24,6 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def initialize_database() -> None:
-    from app.models import document, page  # noqa: F401
+    from app.models import document, ocr_block, page  # noqa: F401
 
     Base.metadata.create_all(bind=engine)

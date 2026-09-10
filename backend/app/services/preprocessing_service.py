@@ -10,6 +10,7 @@ from app.core.config import Settings
 from app.core.database import SessionLocal
 from app.models.document import Document, DocumentStatus
 from app.models.page import Page
+from app.services.ocr_service import process_document_ocr
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +103,7 @@ def preprocess_page_image(
 
 def preprocess_document_pages(document_id: uuid.UUID, settings: Settings) -> None:
     created_paths: list[Path] = []
+    preprocessing_succeeded = False
     with SessionLocal() as database:
         document = database.get(Document, document_id)
         if document is None:
@@ -134,6 +136,7 @@ def preprocess_document_pages(document_id: uuid.UUID, settings: Settings) -> Non
 
             document.status = DocumentStatus.OCR_PROCESSING
             database.commit()
+            preprocessing_succeeded = True
         except Exception as exc:
             database.rollback()
             _remove_preprocessed_files(created_paths, output_directory)
@@ -141,6 +144,9 @@ def preprocess_document_pages(document_id: uuid.UUID, settings: Settings) -> Non
             if failed_document is not None:
                 _mark_failed(database, failed_document, str(exc)[:2000])
             logger.exception("Image preprocessing failed for document %s", document_id)
+
+    if preprocessing_succeeded:
+        process_document_ocr(document_id, settings)
 
 
 def _deskew(image: np.ndarray, maximum_angle: float) -> tuple[np.ndarray, float]:

@@ -39,6 +39,11 @@ export async function getDocumentPages(documentId) {
   return data
 }
 
+export async function getDocumentPage(documentId, pageNumber) {
+  const { data } = await api.get(`/documents/${documentId}/pages/${pageNumber}`)
+  return data
+}
+
 export function getPageImageUrl(imagePath) {
   return new URL(imagePath, `${api.defaults.baseURL}/`).toString()
 }

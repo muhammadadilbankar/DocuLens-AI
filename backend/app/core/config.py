@@ -19,6 +19,15 @@ class Settings(BaseSettings):
     preprocessing_min_width: int = 1600
     denoise_strength: int = 7
     max_deskew_angle: float = 5.0
+    ocr_device: str = "cpu"
+    ocr_enable_mkldnn: bool = False
+    ocr_detection_model: str = "PP-OCRv5_mobile_det"
+    ocr_recognition_model: str = "en_PP-OCRv5_mobile_rec"
+    ocr_min_confidence: float = 0.25
+    model_cache_directory: Path = Path("models_cache")
+    ocr_model_source: str = "BOS"
+    ocr_detection_model_dir: Path | None = None
+    ocr_recognition_model_dir: Path | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -56,6 +65,13 @@ class Settings(BaseSettings):
             return self.processed_directory
         backend_root = Path(__file__).resolve().parents[2]
         return backend_root / self.processed_directory
+
+    @property
+    def resolved_model_cache_directory(self) -> Path:
+        if self.model_cache_directory.is_absolute():
+            return self.model_cache_directory
+        backend_root = Path(__file__).resolve().parents[2]
+        return backend_root / self.model_cache_directory
 
 
 @lru_cache

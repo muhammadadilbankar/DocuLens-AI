@@ -35,7 +35,7 @@ export function useDocumentPages(documentId) {
   }, [refresh])
 
   useEffect(() => {
-    if (!pipelineRequested || !['CONVERTING', 'PREPROCESSING'].includes(document?.status)) return undefined
+    if (!pipelineRequested || !['CONVERTING', 'PREPROCESSING', 'OCR_PROCESSING'].includes(document?.status)) return undefined
     const timer = window.setInterval(refresh, 1500)
     return () => window.clearInterval(timer)
   }, [document?.status, pipelineRequested, refresh])

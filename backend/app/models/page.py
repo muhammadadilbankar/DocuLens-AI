@@ -36,3 +36,9 @@ class Page(Base):
     )
 
     document: Mapped["Document"] = relationship(back_populates="pages")  # noqa: F821
+    ocr_blocks: Mapped[list["OcrBlock"]] = relationship(  # noqa: F821
+        back_populates="page",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="OcrBlock.reading_order",
+    )

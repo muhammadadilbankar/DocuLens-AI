@@ -17,6 +17,7 @@ class DocumentResponse(BaseModel):
     id: UUID
     original_filename: str
     page_count: int
+    ocr_page_count: int
     status: DocumentStatus
     created_at: datetime
     processed_at: datetime | None
